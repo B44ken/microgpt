@@ -165,7 +165,7 @@ const faq: { q: string, a: string }[] = [{
     a: 'if we connect layer 1 directly to layer 2, and 2 directly to 3, and so on... what we\'ve done in a sense is a "highway" where gradients flow directly forwards and backwards. they also let each layer learn a small delta rather than reconstructing the entire representation.',
 }, {
     q: 'how does this compare to chatgpt?',
-    a: 'it\s not that different, just much bigger. 100+ billion parameters, 1000+ dimensions, dozens of transformer layers, etc. but there are some subtleties, like how chatgpt trains on some human feedback on top of just loss. and instead of characters, it predicts \'tokens\', which could be syllables or common full words.'
+    a: 'it\'s not that different, just much bigger. 100+ billion parameters, 1000+ dimensions, dozens of transformer layers, etc. but there are some subtleties, like how chatgpt trains on some human feedback on top of just loss. and instead of characters, it predicts \'tokens\', which could be syllables or common full words.'
 }]
 
 export default function Explainer({ clicked, stateDict, onBack }: { clicked: string, stateDict?: StateDict, onBack?: () => void }) {
