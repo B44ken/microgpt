@@ -3,24 +3,20 @@ import * as tf from '@tensorflow/tfjs'
 type StateDict = Record<string, tf.Variable>
 
 // returns flat array of .data from a weight matrix (first 16 rows flattened)
-const flatWeights = (sd: StateDict, key: string): number[] | undefined => {
+const flatWeights = (sd: StateDict, key: string, maxRows = 16, maxCols = 64): number[] | undefined => {
     const t = sd[key]
     if (!t) return undefined
 
-    // Extract 16x16 subgrid
-    // Variable is [Rows, Cols]
-    const rows = Math.min(t.shape[0] || 0, 16)
-    const cols = Math.min(t.shape[1] || 0, 16)
+    const rows = Math.min(t.shape[0] || 0, maxRows)
+    const cols = Math.min(t.shape[1] || 0, maxCols)
     const res: number[] = []
 
     const data = t.dataSync() as Float32Array
     const fullCols = t.shape[1] || 0
 
-    for (let i = 0; i < rows; i++) {
-        for (let j = 0; j < cols; j++) {
+    for (let i = 0; i < rows; i++)
+        for (let j = 0; j < cols; j++)
             res.push(data[i * fullCols + j])
-        }
-    }
     return res
 }
 
@@ -38,8 +34,7 @@ const WeightGrid = ({ data, label, rows = 16, cols = 16 }: { data: number[], lab
     return <div className='mt-2'>
         <div className='text-xs opacity-75 mb-1'>{label} [{rows}×{cols}]</div>
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 6px)`, gap: 0 }}>
-            {data.map((v, i) => <div key={i} title={v.toFixed(4)}
-                style={{ width: 6, height: 6, background: valColor(v, min, max) }} />)}
+            {data.map((v, i) => <div key={i} title={v.toFixed(4)} style={{ width: 6, height: 6, background: valColor(v, min, max) }} />)}
         </div>
     </div>
 }
@@ -57,15 +52,18 @@ const explain: Record<string, Entry> = {
     }, 'norm0': {
         text: 'a rescale step. see faq for details.',
         io: 'in: float [16] → out: float [16]',
+        weights: [],
     }, 'transformer': {
         text: 'the transformer block is the core building block. it contains multi-head self-attention (to mix information across positions) followed by a feed-forward mlp (to process each position independently). residual connections around both let gradients flow directly backward.',
         io: 'in: float [16] → out: float [16]',
     }, 'r1': {
         text: 'save a copy of x before attention. after attention transforms x, we add this copy back (residual connection). this lets the model preserve information that might be lost during attention.',
         io: 'in: float [16] → out: float [16] (identity copy)',
+        weights: [],
     }, 'norm1': {
         text: 'a rescale step. see faq for details.',
         io: 'in: float [16] → out: float [16]',
+        weights: [],
     }, 'qkv': {
         text: 'three parallel linear projections produce query, key, and value vectors. you can think about this as defining "looking for" (Q), what it "contains" (K), and what information it "provides" (V). for example, where Q · K is high, Q[i] is looking for and has successfully found whatever K[i] is. then, V[i] is the information itself.',
         io: 'in: float [16] → out: 3× float [16]',
@@ -137,7 +135,7 @@ const explain: Record<string, Entry> = {
 
 const faq: { q: string, a: string }[] = [{
     q: 'why 16 dims, 4 heads, 64 in the mlp?',
-    a: 'hyperparameters chosen largely arbitrarily, trading speed for intelligence. but in general, ideas are represented in a few dimensions (16 here, 10k ish for modern llms) to be our space of "meaning". we want a handful of attention heads to focus on different aspects of the input, and a larger multilayer perceptron to learn more nonlinear relationships between things.',
+    a: 'hyperparameters chosen largely arbitrarily, trading speed for intelligence. but in general, ideas are represented in a few dimensions (16 here, 10k ish for modern llms) to be our space of \'meaning\'. we want a handful of attention heads to focus on different aspects of the input, and a larger multilayer perceptron to learn more nonlinear relationships between things.',
 }, {
     q: 'what does a cell in the weight heatmap mean?',
     a: 'it\'s a matrix entry. many of our operations are like W . x, where x is the dims=16 vector mentioned earlier, and W does some sort of learned transformation as part of its "thinking" process.'
@@ -145,7 +143,10 @@ const faq: { q: string, a: string }[] = [{
     q: 'how does training change the weights?',
     a: 'we attempt to generate the next character of a name, and then compute the entropy of our result to determine how wrong we were. we then use gradient descent (backpropagation) to adjust the weights to reduce the error. over time, the model learns to generate names that are more likely to be in the training data.',
 }, {
-    q: 'what (and why) is RMSnorm?',
+    q: 'what is attention?',
+    a: 'it decides which characters matter! the current character has \'what am i looking for?\' (Q). each previous character has \'what do i contain?\' (K) and a value (V). for each character i, we compute something like Σᵢ (Q ⋅ Kᵢ) ⋅ Vᵢ, so that Q ≈ Kᵢ means the model focuses on that Vᵢ. it allows for non-local rules like \'i before e except after c\'.',
+}, {
+    q: 'what is RMSnorm?',
     a: 'RMSnorm(x) = x / √(mean(x²)). it rescales the vector so its root-mean-square equals 1. this prevents "activation drift" where values grow or shrink too far away from each other.',
 }, {
     q: 'why scale attention scores by 1/√d?',
@@ -158,26 +159,26 @@ const faq: { q: string, a: string }[] = [{
     a: 'at this scale, not much... but it does learn some simple patterns like common starting letters and consonant-vowel alternation.',
 }, {
     q: 'what would more layers do?',
-    a: 'more layers means more sequential processing steps. layer 1 might learn common pairs like "ie", "qu", ..., while layer 2 might learn higher-level word structure, and so on. modnrn llms have a few dozen layers. determining what they all do is an active area of research.',
+    a: 'more layers means more sequential processing steps. layer 1 might learn common pairs like "ie", "qu", ..., while layer 2 might learn higher-level word structure, and so on. modern llms have a few dozen layers. determining what they all do is an active area of research.',
 }, {
     q: 'why do residual connections matter so much?',
     a: 'if we connect layer 1 directly to layer 2, and 2 directly to 3, and so on... what we\'ve done in a sense is a "highway" where gradients flow directly forwards and backwards. they also let each layer learn a small delta rather than reconstructing the entire representation.',
+}, {
+    q: 'how does this compare to chatgpt?',
+    a: 'it\s not that different, just much bigger. 100+ billion parameters, 1000+ dimensions, dozens of transformer layers, etc. but there are some subtleties, like how chatgpt trains on some human feedback on top of just loss. and instead of characters, it predicts \'tokens\', which could be syllables or common full words.'
 }]
 
 export default function Explainer({ clicked, stateDict, onBack }: { clicked: string, stateDict?: StateDict, onBack?: () => void }) {
     const entry = clicked ? explain[clicked] : undefined
 
     if (!entry) return <div className='mt-4 text-left'>
-        <p className='text-sm opacity-75 mb-3'>inspired by <a href="https://karpathy.github.io/2026/02/12/microgpt/">karpathy's microgpt</a>. basically, it's a gpt-2 like neural network architecture (but much smaller). the training data is a <a href="https://raw.githubusercontent.com/karpathy/makemore/refs/heads/master/names.txt">list of names</a>. you can train it up to a thousand (or a couple thousand) steps, at which point it learns to make up fairly convincing names. click a node to learn more.</p>
-        <h3 className='font-bold text-sm mb-2'>questions</h3>
-        {faq.map((f, i) => <details key={i} className='mb-2 text-sm'>
-            <summary className='cursor-pointer opacity-75 hover:opacity-100'>{f.q}</summary>
-            <p className='opacity-60 mt-1 ml-1'>{f.a}</p>
-        </details>)}
+        <h3>questions</h3>
+        {faq.map(({ q, a }, i) => <details key={i}> <summary>{q}</summary> <p>{a}</p> </details>)} <br />
+        <p className='text-sm opacity-75'>source on <a href="https://github.com/b44ken/microgpt">github</a>. inspired by <a href="https://karpathy.github.io/2026/02/12/microgpt/">karpathy's</a> microgpt.</p>
     </div>
 
-    return <div className='text-left mt-4'>
-        <button className='text-xs opacity-75 hover:opacity-100 mb-2' onClick={onBack}>← back</button>
+    return <div className='text-left'>
+        <button className='text-xs opacity-75 hover:opacity-100 mb-2' onClick={onBack}>back</button>
         <h2 className='font-bold'>{clicked}</h2>
         <p className='text-sm opacity-75 mt-1'>{entry.text}</p>
         <p className='text-xs font-mono opacity-75 mt-2'>{entry.io}</p>
@@ -185,8 +186,7 @@ export default function Explainer({ clicked, stateDict, onBack }: { clicked: str
             const data = flatWeights(stateDict, key)
             if (!data) return null
             const w = stateDict[key]
-            return <WeightGrid key={key} data={data} label={key}
-                rows={Math.min(w.shape[0] || 0, 16)} cols={Math.min(w.shape[1] || 0, 16)} />
+            return <WeightGrid key={key} data={data} label={key} rows={Math.min(w.shape[0] || 0, 16)} cols={Math.min(w.shape[1] || 0, 64)} />
         })}
     </div>
 }

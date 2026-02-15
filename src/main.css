@@ -2,11 +2,10 @@
 @import 'tailwindcss';
 
 body {
-    width: 100vw;
-    margin: 0 auto;
     font: 18px/1.6 'Inter', sans-serif;
     background: #111;
     color: #eee;
+    @apply flex flex-col md:flex-row h-screen text-sm mx-auto items-center justify-center w-full gap-4;
 }
 
 a {
@@ -18,22 +17,68 @@ details {
     margin: 4px 0;
 }
 
-pre {
-    background: #0d1117;
-    padding: 1em;
-    border-radius: 4px;
-    overflow-x: auto;
+.menu-toggle {
+    @apply md:hidden fixed top-4 left-4 z-50 p-2
 }
 
-code {
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 0 2px;
-}
+nav {
+    @apply fixed inset-y-0 left-0 z-40 w-[90vw] bg-[#111] p-6 shadow-2xl transition-transform duration-300 transform max-md:-translate-x-full md:translate-x-0 md:relative md:shadow-none md:p-0 md:py-12 md:flex md:flex-col overflow-y-auto md:w-[360px] border-r md:border-none border-zinc-800;
 
-@media(orientation: portrait) {
-    body {
-        width: 100vw;
-        font-size: 16px;
+    &>* {
+        @apply mt-3
     }
+}
+
+h1 {
+    @apply text-2xl font-bold mt-8 md:mt-0
+}
+
+h3 {
+    @apply font-bold
+}
+
+summary {
+    @apply cursor-pointer opacity-75 hover:opacity-100
+}
+
+p {
+    @apply opacity-75
+}
+
+nav.open {
+    @apply max-md:translate-x-0
+}
+
+label {}
+
+.btn-row {
+    @apply flex gap-2 w-full;
+
+    &>* {
+        @apply py-1 flex-1 border rounded-sm px-1
+    }
+}
+
+.output {
+    @apply p-3 font-mono border rounded text-base min-h-[2.5em]
+}
+
+.metrics {
+    @apply flex gap-2 w-full justify-between opacity-75
+}
+
+.tutorial {
+    @apply p-3 rounded border bg-zinc-900/50 whitespace-pre-line
+}
+
+.opt {
+    @apply flex justify-between
+}
+
+.opt input {
+    @apply w-14 border rounded text-right
+}
+
+main {
+    @apply h-screen md:w-auto w-full overflow-y-auto pt-16 md:pt-0
 }

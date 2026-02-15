@@ -1,10 +1,10 @@
 import { type ReactNode } from "react"
-import type { Trace, LayerTrace, HeadTrace, ModelOpts } from './microgpt'
+import type { Trace, LayerTrace, HeadTrace, ModelOpts } from './microgpt.ts'
 
 const colors = { attn: '', mlp: '', norm: '' }
 
 const valColor = (v: number, min: number, max: number) => {
-    if (v >= 0) {
+    if (v > 0) {
         const t = max > 0 ? v / max : 0
         return `rgb(${187 * t}, ${204 * t}, ${255 * t})`
     }
@@ -18,7 +18,7 @@ const Val = ({ data, n = 16 }: { data?: number[], n?: number }) => {
     </div>
     const min = Math.min(...data, -1), max = Math.max(...data, 1)
     return <div className="flex gap-0 w-fit mx-auto items-center mt-1 *:w-2 *:h-6 border border-[0.5]">
-        {data.slice(0, 24).map((v, i) => <div key={i} title={v.toFixed(3)} style={{ background: valColor(v, min, max) }} />)}
+        {data.slice(0, n).map((v, i) => <div key={i} title={v.toFixed(3)} style={{ background: valColor(v, min, max) }} />)}
     </div>
 }
 
@@ -27,7 +27,7 @@ const CacheGrid = ({ grid }: { grid?: number[][] }) => {
         {Array.from({ length: 16 }, (_, i) => <div key={i} style={{ width: 6, height: 6, background: '#111' }} />)}
     </div>
     const flat = grid.flat()
-    const min = Math.min(...flat, -1), max = Math.max(...flat, 1)
+    const min = Math.min(...flat), max = Math.max(...flat)
     const cols = Math.min(grid[0].length, 16)
     return <div className="w-fit mx-auto mt-1 border border-[0.5]" style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 6px)` }}>
         {grid.map((row, ri) => row.slice(0, 16).map((v, ci) =>
@@ -59,15 +59,15 @@ const Block = ({ label = '', children, row = false, dashed = false, tooltip, onC
 type Cfg = Required<ModelOpts>
 
 const Head = ({ h, t, onClick, hd }: { h: number, t?: HeadTrace, onClick?: (id: string) => void, hd: number }) => <Block label={<>head {h}</>} dashed tooltip={`head${h}`} onClick={onClick}>
-    <Node name={<>q<sub>[{h * hd}:{h * hd + hd - 1}]</sub> · k<sub>i</sub></>} kind="attn" size={`[i]`} data={t?.scores} tooltip={`scores${h}`} onClick={onClick} n={1} />
-    <Node name="α = softmax" kind="attn" size="[i]" data={t?.weights} tooltip={`weights${h}`} onClick={onClick} n={1} />
+    <Node name={<>q<sub>[{h * hd}:{h * hd + hd - 1}]</sub> · k<sub>i</sub></>} kind="attn" size={`[i]`} data={t?.scores} tooltip={`scores${h}`} onClick={onClick} n={10} />
+    <Node name="α = softmax" kind="attn" size="[i]" data={t?.weights} tooltip={`weights${h}`} onClick={onClick} n={10} />
     <Node name={<>Σ α<sub>i</sub> · v<sub>i</sub></>} kind="attn" size={`[${hd}]`} data={t?.out} tooltip={`attn_out${h}`} onClick={onClick} n={hd} />
 </Block>
 
 const Transformer = ({ t, onClick, cfg, li, collapsed }: { t?: LayerTrace, onClick?: (id: string) => void, cfg: Cfg, li: number, collapsed?: boolean }) => {
     const d = cfg.n_embd, mlp = 4 * d, hd = Math.floor(d / cfg.n_head)
 
-    if (collapsed) return <Node name={<>transformer {li}</>} size={`[${d}]`} data={t?.res2} tooltip='transformer' onClick={onClick} />
+    if (collapsed) return <div className="min-w-[200px]"><Node name={<>transformer {li}</>} size={`[${d}]`} data={t?.res2} tooltip='transformer' onClick={onClick} /></div>
 
     return <Block label={`transformer ${li}`} dashed tooltip='transformer' onClick={onClick}>
         <Node name={<>R<sub>1</sub> = x</>} size={`[${d}]`} data={t?.r1} tooltip='r1' onClick={onClick} />
@@ -91,7 +91,7 @@ const Transformer = ({ t, onClick, cfg, li, collapsed }: { t?: LayerTrace, onCli
             <Node name={<>R<sub>2</sub> = x</>} data={t?.r2} tooltip='r2' onClick={onClick} />
         </Block>
         <Node name="RMSnorm" kind="norm" data={t?.norm2} tooltip='norm2' onClick={onClick} />
-        <Block dashed label="neural net" row tooltip='mlp' onClick={onClick}>
+        <Block dashed label="multilayer perceptron" row tooltip='mlp' onClick={onClick}>
             <Node name={<>W<sub>1</sub> · x</>} kind="mlp" size={`[${mlp}]`} data={t?.fc1} tooltip='fc1' onClick={onClick} />
             <ArrowRow />
             <Node name="ReLU" kind="mlp" size={`[${mlp}]`} data={t?.relu} tooltip='relu' onClick={onClick} />
