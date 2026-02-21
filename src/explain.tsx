@@ -1,34 +1,9 @@
 import * as tf from '@tensorflow/tfjs'
+import { valColor } from './arch'
 
 type StateDict = Record<string, tf.Variable>
 
-// returns flat array of .data from a weight matrix (first 16 rows flattened)
-const flatWeights = (sd: StateDict, key: string, maxRows = 16, maxCols = 64): number[] | undefined => {
-    const t = sd[key]
-    if (!t) return undefined
-
-    const rows = Math.min(t.shape[0] || 0, maxRows)
-    const cols = Math.min(t.shape[1] || 0, maxCols)
-    const res: number[] = []
-
-    const data = t.dataSync() as Float32Array
-    const fullCols = t.shape[1] || 0
-
-    for (let i = 0; i < rows; i++)
-        for (let j = 0; j < cols; j++)
-            res.push(data[i * fullCols + j])
-    return res
-}
-
-const valColor = (v: number, min: number, max: number) => {
-    if (v >= 0) {
-        const t = max > 0 ? v / max : 0
-        return `rgb(${187 * t}, ${204 * t}, ${255 * t})`
-    }
-    const t = min < 0 ? v / min : 0
-    return `rgb(${238 * t}, ${68 * t}, ${68 * t})`
-}
-
+const flatWeights = (sd: StateDict, key: string): number[] => Array.from(sd[key].dataSync() as Float32Array)
 const WeightGrid = ({ data, label, rows = 16, cols = 16 }: { data: number[], label: string, rows?: number, cols?: number }) => {
     const min = Math.min(...data, -1), max = Math.max(...data, 1)
     return <div className='mt-2'>
@@ -41,6 +16,7 @@ const WeightGrid = ({ data, label, rows = 16, cols = 16 }: { data: number[], lab
 
 type Entry = { text: string, io: string, weights?: string[] }
 
+// todo: write something about intrepretability in the 2 head case. this is not guaranteed to emerge tho so idk
 const explain: Record<string, Entry> = {
     'input': {
         io: 'in: int [1] → out: int [1]',
@@ -88,22 +64,19 @@ const explain: Record<string, Entry> = {
         text: 'the value cache accumulates value vectors from all previous positions. after generating i tokens, these cached values are weighted and summed to produce the attention output.', io: 'in: float [16] → appended to: float [i × 16]',
     }, 'heads': {
         text: 'multi-head attention splits the [16]-dim space into 4 independent [4]-dim heads. each head can learn different patterns (e.g., one might attend to recent tokens, another to similar characters). results are concatenated back to [16].', io: 'in: q[16], k_cache[i×16], v_cache[i×16] → out: float [16]',
-    }, 'head0': { text: 'head 0 operates on dims [0:3]. it has its own independent pattern, learning which previous positions are relevant for this 4-dimensional subspace.', io: 'in: q[0:3], k_cache[i×4], v_cache[i×4] → out: float [4]' },
-    'head1': { text: 'head 1 operates on dims [4:7]. independent from head 0, it can specialize in a different type of relationship between positions.', io: 'in: q[4:7], k_cache[i×4], v_cache[i×4] → out: float [4]' },
-    'head2': { text: 'head 2 operates on dims [8:11]. a third independent pattern over its own subspace of the embedding.', io: 'in: q[8:11], k_cache[i×4], v_cache[i×4] → out: float [4]' },
-    'head3': { text: 'head 3 operates on dims [12:15]. the fourth and final head, covering the last 4 dimensions of the embedding space.', io: 'in: q[12:15], k_cache[i×4], v_cache[i×4] → out: float [4]' },
-    'scores0': { text: 'raw dot products between this head\'s query slice and all cached key slices, scaled by 1/√d. higher scores mean stronger similarity between the current query and a past key.', io: 'in: q[4], k_cache[i×4] → out: float [i]' },
-    'scores1': { text: 'raw dot products between this head\'s query slice and all cached key slices, scaled by 1/√d. higher scores mean stronger similarity between the current query and a past key.', io: 'in: q[4], k_cache[i×4] → out: float [i]' },
-    'scores2': { text: 'raw dot products between this head\'s query slice and all cached key slices, scaled by 1/√d. higher scores mean stronger similarity between the current query and a past key.', io: 'in: q[4], k_cache[i×4] → out: float [i]' },
-    'scores3': { text: 'raw dot products between this head\'s query slice and all cached key slices, scaled by 1/√d. higher scores mean stronger similarity between the current query and a past key.', io: 'in: q[4], k_cache[i×4] → out: float [i]' },
-    'weights0': { text: 'softmax normalizes the raw scores into a probability distribution over all positions. each weight is between 0 and 1, and they sum to 1. this determines how much each past position contributes to the output.', io: 'in: float [i] → out: float [i] (sums to 1)' },
-    'weights1': { text: 'softmax normalizes the raw scores into a probability distribution over all positions. each weight is between 0 and 1, and they sum to 1. this determines how much each past position contributes to the output.', io: 'in: float [i] → out: float [i] (sums to 1)' },
-    'weights2': { text: 'softmax normalizes the raw scores into a probability distribution over all positions. each weight is between 0 and 1, and they sum to 1. this determines how much each past position contributes to the output.', io: 'in: float [i] → out: float [i] (sums to 1)' },
-    'weights3': { text: 'softmax normalizes the raw scores into a probability distribution over all positions. each weight is between 0 and 1, and they sum to 1. this determines how much each past position contributes to the output.', io: 'in: float [i] → out: float [i] (sums to 1)' },
-    'attn_out0': { text: 'weighted sum of cached value vectors using the attention weights. this is the "output" of this attention head - a [4]-dim vector that combines information from all attended positions.', io: 'in: weights[i], v_cache[i×4] → out: float [4]' },
-    'attn_out1': { text: 'weighted sum of cached value vectors using the attention weights. this is the "output" of this attention head - a [4]-dim vector that combines information from all attended positions.', io: 'in: weights[i], v_cache[i×4] → out: float [4]' },
-    'attn_out2': { text: 'weighted sum of cached value vectors using the attention weights. this is the "output" of this attention head - a [4]-dim vector that combines information from all attended positions.', io: 'in: weights[i], v_cache[i×4] → out: float [4]' },
-    'attn_out3': { text: 'weighted sum of cached value vectors using the attention weights. this is the "output" of this attention head - a [4]-dim vector that combines information from all attended positions.', io: 'in: weights[i], v_cache[i×4] → out: float [4]' },
+    },
+}
+
+// generate per-head entries programmatically
+for (let h = 0; h < 4; h++) {
+    const s = h * 4, e = s + 3
+    explain[`head${h}`] = { text: `head ${h} operates on dims [${s}:${e}]. it learns which previous positions are relevant for this 4-dimensional subspace.`, io: `in: q[${s}:${e}], k_cache[i×4], v_cache[i×4] → out: float [4]` }
+    explain[`scores${h}`] = { text: "raw dot products between this head's query slice and all cached key slices, scaled by 1/√d. higher scores mean stronger similarity between the current query and a past key.", io: 'in: q[4], k_cache[i×4] → out: float [i]' }
+    explain[`weights${h}`] = { text: 'softmax normalizes the raw scores into a probability distribution over all positions. each weight is between 0 and 1, and they sum to 1. this determines how much each past position contributes to the output.', io: 'in: float [i] → out: float [i] (sums to 1)' }
+    explain[`attn_out${h}`] = { text: 'weighted sum of cached value vectors using the attention weights. this is the "output" of this attention head - a [4]-dim vector that combines information from all attended positions.', io: 'in: weights[i], v_cache[i×4] → out: float [4]' }
+}
+
+Object.assign(explain, {
     'wo': {
         text: 'the output projection W_O mixes the concatenated head outputs back together. this is the only place where information from different heads can interact. the result is a [16]-dim vector.', io: 'in: float [16] (concat heads) → out: float [16]', weights: ['layer0.attn_wo'],
     }, 'residual1': {
@@ -131,7 +104,7 @@ const explain: Record<string, Entry> = {
     }, 'output': {
         text: 'sample one token from the probability distribution. We draw a random number and walk through the cumulative distribution until we find the chosen token. The sampled token becomes the input for the next step of generation.', io: 'in: float [vocab_size] → out: int [1] (token index)',
     }
-}
+})
 
 const faq: { q: string, a: string }[] = [{
     q: 'why 16 dims, 4 heads, 64 in the mlp?',

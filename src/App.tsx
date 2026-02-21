@@ -3,9 +3,9 @@ import * as tf from '@tensorflow/tfjs'
 import { MicroGPT, type Trace, type ModelOpts } from './microgpt'
 import Architecture from './arch'
 import Explainer from './explain'
-import names from './firstnames.json'
+import names from '../data/firstnames.json'
 
-const defaults: Record<string, number> = { n_embd: 16, n_head: 4, n_layer: 1, block_size: 16, batch: 10 }
+const defaults: Record<string, number> = { n_embd: 16, n_head: 2, n_layer: 1, block_size: 16 }
 
 const tutorial = [
   "hello! this is a GPT, a neural network that generates text one character at a time. this one has a dataset of names it'll learn to copy. by default, it spits out random text. click generate...",
@@ -33,12 +33,11 @@ export default function App() {
 
   const train = useCallback(() => {
     const m = model.current
-    m && setRun(r => ({ ...r, loss: m.trainSteps(10, opts.batch), step: m.step_count }))
-  }, [opts.batch])
+    m && setRun(r => ({ ...r, loss: m.trainSteps(1000), step: m.step_count }))
+  }, [])
 
   const gen = useCallback(() => {
-    const m = model.current; if (!m) return
-    const { text, trace, done } = m.generateStep()
+    const { text, trace, done } = model.current?.generateStep() ?? { text: '', trace: undefined, done: true }
     setRun(r => ({ ...r, output: text, trace }))
     if (done) setMode('idle')
   }, [])
@@ -101,9 +100,9 @@ export default function App() {
 
       <div className='*:mt-1'>
         <h3>parameters</h3>
-        <Opt label='dimension' k='n_embd' /> <Opt label='layers' k='n_layer' /> <Opt label='batch size' k='batch' />
+        <Opt label='dimension' k='n_embd' /> <Opt label='layers' k='n_layer' /> <Opt label='heads' k='n_head' />
         <label className='flex justify-between'> collapse <input type='checkbox' checked={collapsed} onChange={e => setCollapsed(e.target.checked)} /> </label>
-        <div className='opacity-75 text-right'> total params: {Math.floor((model.current?.num_params || 0) / 1000)}k </div>
+        <div className='opacity-75 text-right'> total params: {Math.floor((model.current?.num_params() || 0) / 1000)}k </div>
       </div>
     </nav >
 
