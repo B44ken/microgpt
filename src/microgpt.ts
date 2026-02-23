@@ -194,7 +194,7 @@ export class MicroGPT {
         return loss.dataSync()[0]
     }
 
-    trainSteps = (batch = 10, n = 1) => Array.from({ length: n }, () => this.trainStep(batch)).reduce((a, b) => a + b / n, 0)
+    trainSteps = (n = 10, batch = 20) => Array.from({ length: n }, () => this.trainStep(batch)).reduce((a, b) => a + b / n, 0)
 
     private genToken: number | undefined; private text: string = ''
     resetGeneration() { this.genToken = this.tokenizer.bos; this.text = '' }

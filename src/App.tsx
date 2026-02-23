@@ -10,9 +10,9 @@ const defaults: Record<string, number> = { n_embd: 16, n_head: 2, n_layer: 1, bl
 const tutorial = [
   "hello! this is a GPT, a neural network that generates text one character at a time. this one has a dataset of names it'll learn to copy. by default, it spits out random text. click generate...",
   "see? total nonsense. it hasn't learned anything yet. click train...",
-  "the loss should go down a little bit... (STEP/500)",
+  "the loss should go down a little bit... (STEP/2000)",
   "nice. now stop training and generate again...",
-  "much better! click any node in the diagram to learn how it works",
+  "now it can generate pronounceable names! click any node in the diagram to learn how it works",
 ]
 
 export default function App() {
@@ -33,7 +33,7 @@ export default function App() {
 
   const train = useCallback(() => {
     const m = model.current
-    m && setRun(r => ({ ...r, loss: m.trainSteps(1000), step: m.step_count }))
+    m && setRun(r => ({ ...r, loss: m.trainSteps(20), step: m.step_count }))
   }, [])
 
   const gen = useCallback(() => {
@@ -58,7 +58,7 @@ export default function App() {
     if (tut < 0) return
     if (tut === 0 && mode === 'gen') setTut(1)
     if (tut === 1 && mode === 'train') setTut(2)
-    if (tut === 2 && run.step >= 490) { setMode('idle'); setTut(3) }
+    if (tut === 2 && run.step >= 1980) { setMode('idle'); setTut(3) }
     if (tut === 3 && mode === 'gen' && prev.current !== 'gen') setTut(4)
     if (tut === 4 && explain !== '') setTut(-1)
     prev.current = mode
