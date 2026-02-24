@@ -1,0 +1,7 @@
+name = "microgpt"
+compatibility_date = "2024-03-20"
+
+[[d1_databases]]
+binding = "HITS_DB"
+database_name = "hits"
+database_id = "f63620bb-4133-4ec9-b158-0f87f416a991"
